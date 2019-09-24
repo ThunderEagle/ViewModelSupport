@@ -9,7 +9,7 @@ namespace ViewModelSupport.Messaging
 {
     public class Messenger : IMessenger
     {
-        private readonly ConcurrentDictionary<Type, List<MessageHandler<MessageBase>>> _subscribers;
+        private readonly ConcurrentDictionary<Type, List<WeakReference>> _subscribers;
 
         private static readonly object _defaultLock = new object();
         private static IMessenger _defaultInstance;
@@ -34,7 +34,7 @@ namespace ViewModelSupport.Messaging
 
         public Messenger()
         {
-            _subscribers = new ConcurrentDictionary<Type, List<MessageHandler<MessageBase>>>();
+            _subscribers = new ConcurrentDictionary<Type, List<WeakReference>>();
         }
 
 
@@ -43,9 +43,9 @@ namespace ViewModelSupport.Messaging
             var subscriptions = _subscribers[typeof(T)];
             foreach (var subscription in subscriptions)
             {
-                if (subscription.Target.IsAlive)
+                if (subscription.Target is MessageHandler<T> messageHandler && messageHandler.Target.IsAlive)
                 {
-                    subscription.Handler?.Invoke(message);
+                    messageHandler.Handler?.Invoke(message);
                 }
             }
         }
@@ -55,10 +55,11 @@ namespace ViewModelSupport.Messaging
             var messageType = typeof(T);
             if (!_subscribers.ContainsKey(messageType))
             {
-                _subscribers.TryAdd(messageType, new List<MessageHandler<MessageBase>>());
+                _subscribers.TryAdd(messageType, new List<WeakReference>());
             }
             var list = _subscribers[messageType];
-            list.Add(new MessageHandler<MessageBase>(target, handler as Action<MessageBase>));
+            var messageHandler = new MessageHandler<T>(target, handler);
+            list.Add(new WeakReference(messageHandler));
         }
 
         public void Unsubscribe<T>(object target)
@@ -67,7 +68,8 @@ namespace ViewModelSupport.Messaging
 
 
             var subscription = _subscribers[messageType];
-            subscription.RemoveAll(s => s.Target.Target == target);
+
+            subscription.RemoveAll(s => ((MessageHandler<MessageBase>)s.Target).Target == target);
             if (subscription.Count == 0)
             {
                 _subscribers.TryRemove(messageType, out subscription);
@@ -79,7 +81,7 @@ namespace ViewModelSupport.Messaging
         {
             foreach (var handler in _subscribers)
             {
-                handler.Value.RemoveAll(s => s.Target.Target == target);
+                handler.Value.RemoveAll(s => ((MessageHandler<MessageBase>)s.Target).Target == target);
             }
         }
 

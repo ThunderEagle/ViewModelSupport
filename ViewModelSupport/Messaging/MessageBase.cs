@@ -4,11 +4,15 @@ using System.Text;
 
 namespace ViewModelSupport.Messaging
 {
-    public class MessageBase
-    {
-        public MessageBase() { }
+    public interface IMessageBase {
+        object Sender { get; }
+    }
 
-        public MessageBase(object sender)
+    public abstract class MessageBase:IMessageBase
+    {
+        protected MessageBase() { }
+
+        protected MessageBase(object sender)
         {
             Sender = sender;
         }
